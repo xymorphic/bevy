@@ -818,7 +818,9 @@ pub(crate) fn write_atmosphere_buffer(
     atmosphere_entity: Query<&GpuAtmosphere, With<Camera3d>>,
     mut atmosphere_buffer: ResMut<AtmosphereBuffer>,
 ) {
-    let Ok(atmosphere) = atmosphere_entity.single() else {
+    // Every camera draws the same atmosphere, so any camera's copy fills the shared buffer.
+    // `single()` left it unwritten while two cameras had an atmosphere.
+    let Some(atmosphere) = atmosphere_entity.iter().next() else {
         return;
     };
 

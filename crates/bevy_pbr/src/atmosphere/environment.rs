@@ -9,7 +9,7 @@ use bevy_asset::{load_embedded_asset, AssetServer, Assets, Handle, RenderAssetUs
 use bevy_ecs::{
     component::Component,
     entity::Entity,
-    query::{With, Without},
+    query::{Has, With, Without},
     resource::Resource,
     system::{Commands, Query, Res, ResMut},
     template::FromTemplate,
@@ -23,7 +23,7 @@ use bevy_render::{
     render_resource::{binding_types::*, *},
     renderer::{RenderContext, RenderDevice, ViewQuery},
     texture::{CachedTexture, GpuImage},
-    view::{ViewUniform, ViewUniformOffset, ViewUniforms},
+    view::{ExtractedView, ViewUniform, ViewUniformOffset, ViewUniforms},
 };
 use bevy_utils::default;
 use tracing::warn;
@@ -105,17 +105,27 @@ pub(super) fn prepare_atmosphere_probe_bind_groups(
     pipeline_cache: Res<PipelineCache>,
     mut commands: Commands,
 ) {
+    // The transforms exist only for active views, so a probe on an inactive camera waits.
+    let (Some(atmosphere), Some(settings), Some(transforms), Some(view), Some(lights)) = (
+        atmosphere_uniforms.binding(),
+        settings_uniforms.binding(),
+        atmosphere_transforms.uniforms().binding(),
+        view_uniforms.uniforms.binding(),
+        lights_uniforms.view_gpu_lights.binding(),
+    ) else {
+        return;
+    };
     for (entity, textures) in &probes {
         let environment = render_device.create_bind_group(
             "environment_bind_group",
             &pipeline_cache.get_bind_group_layout(&layouts.environment),
             &BindGroupEntries::with_indices((
                 // uniforms
-                (0, atmosphere_uniforms.binding().unwrap()),
-                (1, settings_uniforms.binding().unwrap()),
-                (2, atmosphere_transforms.uniforms().binding().unwrap()),
-                (3, view_uniforms.uniforms.binding().unwrap()),
-                (4, lights_uniforms.view_gpu_lights.binding().unwrap()),
+                (0, atmosphere.clone()),
+                (1, settings.clone()),
+                (2, transforms.clone()),
+                (3, view.clone()),
+                (4, lights.clone()),
                 // atmosphere luts and sampler
                 (8, &textures.transmittance_lut.default_view),
                 (9, &textures.multiscattering_lut.default_view),
@@ -136,7 +146,11 @@ pub(super) fn prepare_atmosphere_probe_bind_groups(
 pub(super) fn prepare_probe_textures(
     view_textures: Query<&AtmosphereTextures, With<ExtractedAtmosphere>>,
     probes: Query<
-        (Entity, &AtmosphereEnvironmentMap),
+        (
+            Entity,
+            &AtmosphereEnvironmentMap,
+            Option<&AtmosphereTextures>,
+        ),
         (
             With<AtmosphereEnvironmentMap>,
             Without<AtmosphereProbeTextures>,
@@ -145,15 +159,15 @@ pub(super) fn prepare_probe_textures(
     gpu_images: Res<RenderAssets<GpuImage>>,
     mut commands: Commands,
 ) {
-    for (probe, render_env_map) in &probes {
+    for (probe, render_env_map, own_textures) in &probes {
         let environment = gpu_images.get(&render_env_map.environment_map).unwrap();
         // create a cube view
         let environment_view = environment.texture.create_view(&TextureViewDescriptor {
             dimension: Some(TextureViewDimension::D2Array),
             ..Default::default()
         });
-        // Get the first view entity's textures to borrow
-        if let Some(view_textures) = view_textures.iter().next() {
+        // A probe on a camera uses that camera's own sky. Other probes borrow the first view's.
+        if let Some(view_textures) = own_textures.or_else(|| view_textures.iter().next()) {
             commands.entity(probe).insert(AtmosphereProbeTextures {
                 environment: environment_view,
                 transmittance_lut: view_textures.transmittance_lut.clone(),
@@ -250,7 +264,12 @@ pub fn atmosphere_environment(
         &ViewUniformOffset,
         &ViewLightsUniformOffset,
     )>,
-    probe_query: Query<(&AtmosphereProbeBindGroups, &AtmosphereEnvironmentMap)>,
+    probe_query: Query<(
+        Entity,
+        &AtmosphereProbeBindGroups,
+        &AtmosphereEnvironmentMap,
+        Has<ExtractedView>,
+    )>,
     pipeline_cache: Res<PipelineCache>,
     pipelines: Res<AtmosphereProbePipeline>,
     mut ctx: RenderContext,
@@ -260,6 +279,7 @@ pub fn atmosphere_environment(
         return;
     };
 
+    let view_entity = view.entity();
     let (
         atmosphere_uniforms_offset,
         settings_uniforms_offset,
@@ -268,7 +288,11 @@ pub fn atmosphere_environment(
         lights_uniforms_offset,
     ) = view.into_inner();
 
-    for (bind_groups, env_map_light) in probe_query.iter() {
+    // A probe on a camera is filled once, by its own view. Other probes go with every view.
+    for (_, bind_groups, env_map_light, _) in probe_query
+        .iter()
+        .filter(|(probe, _, _, is_view)| !is_view || *probe == view_entity)
+    {
         let command_encoder = ctx.command_encoder();
         let mut pass = command_encoder.begin_compute_pass(&ComputePassDescriptor {
             label: Some("environment_pass"),
