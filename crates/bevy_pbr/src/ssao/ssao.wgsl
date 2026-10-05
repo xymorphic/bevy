@@ -74,7 +74,9 @@ fn calculate_neighboring_depth_differences(pixel_coordinates: vec2<i32>) -> f32 
 }
 
 fn load_normal_view_space(uv: vec2<f32>) -> vec3<f32> {
-    var world_normal = textureSampleLevel(normals, point_clamp_sampler, uv, 0.0).xyz;
+    // The normal prepass covers the whole render target, and uv is relative to the viewport.
+    let target_uv = (uv * view.viewport.zw + view.viewport.xy) / vec2<f32>(textureDimensions(normals));
+    var world_normal = textureSampleLevel(normals, point_clamp_sampler, target_uv, 0.0).xyz;
     world_normal = (world_normal * 2.0) - 1.0;
     let view_from_world = mat3x3<f32>(
         view.view_from_world[0].xyz,

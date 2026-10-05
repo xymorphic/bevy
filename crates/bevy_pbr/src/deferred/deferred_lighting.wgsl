@@ -9,7 +9,7 @@
 }
 
 #ifdef SCREEN_SPACE_AMBIENT_OCCLUSION
-#import bevy_pbr::mesh_view_bindings::screen_space_ambient_occlusion_texture
+#import bevy_pbr::mesh_view_bindings::{screen_space_ambient_occlusion_texture, view}
 #import bevy_pbr::ssao_utils::ssao_multibounce
 #endif
 
@@ -63,7 +63,8 @@ fn fragment(in: FullscreenVertexOutput) -> @location(0) vec4<f32> {
     if ((pbr_input.material.flags & STANDARD_MATERIAL_FLAGS_UNLIT_BIT) == 0u) {
 
 #ifdef SCREEN_SPACE_AMBIENT_OCCLUSION
-        let ssao = textureLoad(screen_space_ambient_occlusion_texture, vec2<i32>(in.position.xy), 0i).r;
+        // The SSAO texture covers the viewport, and in.position is relative to the render target.
+        let ssao = textureLoad(screen_space_ambient_occlusion_texture, vec2<i32>(in.position.xy - view.viewport.xy), 0i).r;
         let ssao_multibounce = ssao_multibounce(ssao, pbr_input.material.base_color.rgb);
         pbr_input.diffuse_occlusion = min(pbr_input.diffuse_occlusion, ssao_multibounce);
 

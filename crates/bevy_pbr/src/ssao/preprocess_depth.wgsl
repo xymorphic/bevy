@@ -57,7 +57,9 @@ fn preprocess_depth(@builtin(global_invocation_id) global_id: vec3<u32>, @builti
     let pixel_coordinates1 = pixel_coordinates0 + vec2<i32>(1i, 0i);
     let pixel_coordinates2 = pixel_coordinates0 + vec2<i32>(0i, 1i);
     let pixel_coordinates3 = pixel_coordinates0 + vec2<i32>(1i, 1i);
-    let depths_uv = vec2<f32>(pixel_coordinates0) / view.viewport.zw;
+    // The depth prepass covers the whole render target, and this view starts at the origin of
+    // its viewport within it.
+    let depths_uv = (vec2<f32>(pixel_coordinates0) + view.viewport.xy) / vec2<f32>(textureDimensions(input_depth));
     let depths = textureGather(input_depth, point_clamp_sampler, depths_uv, vec2<i32>(1i, 1i));
     textureStore(preprocessed_depth_mip0, pixel_coordinates0, vec4<f32>(depths.w, 0.0, 0.0, 0.0));
     textureStore(preprocessed_depth_mip0, pixel_coordinates1, vec4<f32>(depths.z, 0.0, 0.0, 0.0));
