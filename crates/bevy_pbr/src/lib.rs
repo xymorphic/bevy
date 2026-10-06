@@ -197,6 +197,7 @@ impl Plugin for PbrPlugin {
         load_shader_library!(app, "deferred/pbr_deferred_types.wgsl");
         load_shader_library!(app, "deferred/pbr_deferred_functions.wgsl");
         load_shader_library!(app, "render/shadow_sampling.wgsl");
+        load_shader_library!(app, "render/alpha_dither.wgsl");
         load_shader_library!(app, "render/pbr_functions.wgsl");
         load_shader_library!(app, "render/rgb9e5.wgsl");
         load_shader_library!(app, "render/pbr_ambient.wgsl");

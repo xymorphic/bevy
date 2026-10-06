@@ -37,7 +37,7 @@ use crate::{
         SpecializedComputePipeline, SpecializedComputePipelines, UniformBuffer,
     },
     renderer::{RenderDevice, RenderGraph, RenderGraphSystems, RenderQueue},
-    ExtractSchedule, RenderApp,
+    ExtractSchedule, RenderApp, RenderStartup,
 };
 
 /// A plugin that allows sparse updates of GPU buffers if only a small number of
@@ -56,9 +56,10 @@ impl Plugin for SparseBufferPlugin {
 
         render_app
             .init_resource::<SparseBufferUpdateJobs>()
-            .init_resource::<SparseBufferUpdatePipelines>()
-            .init_resource::<SpecializedComputePipelines<SparseBufferUpdatePipelines>>()
-            .init_resource::<SparseBufferUpdateBindGroups>()
+            .add_systems(
+                RenderStartup,
+                init_sparse_buffer_resources.ambiguous_with_all(),
+            )
             .add_systems(ExtractSchedule, clear_sparse_buffer_jobs)
             .add_systems(
                 RenderGraph,
@@ -266,6 +267,18 @@ fn update_sparse_buffers(
     }
 
     render_queue.submit([command_encoder.finish()]);
+}
+
+/// Creates the pipeline, its specialization cache, and the bind groups of sparse
+/// buffer updates, in that order. It runs in [`RenderStartup`], so a recovered
+/// render device gets a pipeline ID of its own pipeline cache. A pipeline ID kept
+/// from the lost device would name another pipeline of the new cache.
+fn init_sparse_buffer_resources(world: &mut World) {
+    let pipelines = SparseBufferUpdatePipelines::from_world(world);
+    world.insert_resource(pipelines);
+    world.insert_resource(SpecializedComputePipelines::<SparseBufferUpdatePipelines>::default());
+    let bind_groups = SparseBufferUpdateBindGroups::from_world(world);
+    world.insert_resource(bind_groups);
 }
 
 /// A system that clears out the sparse buffer update jobs in preparation for a

@@ -75,9 +75,14 @@ fn sample_view_target(uv: vec2<f32>) -> vec3<f32> {
 }
 
 @fragment
-fn taa(@location(0) uv: vec2<f32>) -> Output {
+fn taa(@builtin(position) position: vec4<f32>, @location(0) viewport_uv: vec2<f32>) -> Output {
     let texture_size = vec2<f32>(textureDimensions(view_target));
     let texel_size = 1.0 / texture_size;
+    // The textures cover the whole render target, and a camera with a viewport draws into part
+    // of it. `position` is relative to the render target, and `viewport_uv` to the viewport, so
+    // its rate of change gives the size of the viewport.
+    let uv = position.xy * texel_size;
+    let viewport_size = 1.0 / abs(vec2(dpdx(viewport_uv.x), dpdy(viewport_uv.y)));
 
     // Fetch the current sample
     let original_color = textureSample(view_target, nearest_sampler, uv);
@@ -115,6 +120,7 @@ fn taa(@location(0) uv: vec2<f32>) -> Output {
     if d_br > closest_depth {
         closest_uv = d_uv_br;
     }
+    // Motion vectors are relative to the viewport.
     let closest_motion_vector = textureSample(motion_vectors, nearest_sampler, closest_uv).rg;
 
     // Reproject to find the equivalent sample from the past
@@ -122,7 +128,7 @@ fn taa(@location(0) uv: vec2<f32>) -> Output {
     // Catmull-Rom filtering: https://gist.github.com/TheRealMJP/c83b8c0f46b63f3a88a5986f4fa982b1
     // Ignoring corners: https://www.activision.com/cdn/research/Dynamic_Temporal_Antialiasing_and_Upsampling_in_Call_of_Duty_v4.pdf#page=68
     // Technically we should renormalize the weights since we're skipping the corners, but it's basically the same result
-    let history_uv = uv - closest_motion_vector;
+    let history_uv = uv - closest_motion_vector * viewport_size * texel_size;
     let sample_position = history_uv * texture_size;
     let texel_center = floor(sample_position - 0.5) + 0.5;
     let f = sample_position - texel_center;
@@ -163,7 +169,7 @@ fn taa(@location(0) uv: vec2<f32>) -> Output {
 
     // How confident we are that the history is representative of the current frame
     var history_confidence = textureSample(history, nearest_sampler, uv).a;
-    let pixel_motion_vector = abs(closest_motion_vector) * texture_size;
+    let pixel_motion_vector = abs(closest_motion_vector) * viewport_size;
     if pixel_motion_vector.x < 0.01 && pixel_motion_vector.y < 0.01 {
         // Increment when pixels are not moving
         history_confidence += 10.0;
@@ -178,7 +184,8 @@ fn taa(@location(0) uv: vec2<f32>) -> Output {
     var current_color_factor = clamp(1.0 / history_confidence, MIN_HISTORY_BLEND_RATE, DEFAULT_HISTORY_BLEND_RATE);
 
     // Reject history when motion vectors point off screen
-    if any(saturate(history_uv) != history_uv) {
+    let history_viewport_uv = viewport_uv - closest_motion_vector;
+    if any(saturate(history_viewport_uv) != history_viewport_uv) {
         current_color_factor = 1.0;
         history_confidence = 1.0;
     }

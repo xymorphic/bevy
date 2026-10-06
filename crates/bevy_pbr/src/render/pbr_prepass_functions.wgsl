@@ -1,6 +1,7 @@
 #define_import_path bevy_pbr::pbr_prepass_functions
 
 #import bevy_render::bindless::{bindless_samplers_filtering, bindless_textures_2d}
+#import bevy_pbr::alpha_dither::alpha_to_coverage_cutoff
 
 #import bevy_pbr::{
     prepass_io::VertexOutput,
@@ -61,18 +62,23 @@ fn prepass_alpha_discard(in: VertexOutput) {
 #endif // VERTEX_UVS
 
     let alpha_mode = flags & pbr_types::STANDARD_MATERIAL_FLAGS_ALPHA_MODE_RESERVED_BITS;
-    if alpha_mode == pbr_types::STANDARD_MATERIAL_FLAGS_ALPHA_MODE_MASK {
 #ifdef BINDLESS
-        let alpha_cutoff = pbr_bindings::material_array[material_indices[slot].material].alpha_cutoff;
+    let alpha_cutoff = pbr_bindings::material_array[material_indices[slot].material].alpha_cutoff;
 #else   // BINDLESS
-        let alpha_cutoff = pbr_bindings::material.alpha_cutoff;
+    let alpha_cutoff = pbr_bindings::material.alpha_cutoff;
 #endif  // BINDLESS
+    if alpha_mode == pbr_types::STANDARD_MATERIAL_FLAGS_ALPHA_MODE_MASK {
         if output_color.a < alpha_cutoff {
             discard;
         }
+    } else if alpha_mode == pbr_types::STANDARD_MATERIAL_FLAGS_ALPHA_MODE_ALPHA_TO_COVERAGE {
+        // MAY_DISCARD holds for alpha to coverage only without MSAA, where a dithered alpha
+        // test stands in for it (see `alpha_to_coverage_cutoff`).
+        if output_color.a < alpha_to_coverage_cutoff(in.position.xy, alpha_cutoff) {
+            discard;
+        }
     } else if (alpha_mode == pbr_types::STANDARD_MATERIAL_FLAGS_ALPHA_MODE_BLEND ||
-            alpha_mode == pbr_types::STANDARD_MATERIAL_FLAGS_ALPHA_MODE_ADD ||
-            alpha_mode == pbr_types::STANDARD_MATERIAL_FLAGS_ALPHA_MODE_ALPHA_TO_COVERAGE) {
+            alpha_mode == pbr_types::STANDARD_MATERIAL_FLAGS_ALPHA_MODE_ADD) {
         if output_color.a < PREMULTIPLIED_ALPHA_CUTOFF {
             discard;
         }

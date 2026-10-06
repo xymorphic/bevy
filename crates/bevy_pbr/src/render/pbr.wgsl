@@ -1,6 +1,6 @@
 #import bevy_pbr::{
     pbr_types,
-    pbr_functions::alpha_discard,
+    pbr_functions::alpha_discard_at,
     pbr_fragment::pbr_input_from_standard_material,
     decal::clustered::apply_decals,
 }
@@ -66,7 +66,7 @@ fn fragment(
     var pbr_input = pbr_input_from_standard_material(in, is_front);
 
     // alpha discard
-    pbr_input.material.base_color = alpha_discard(pbr_input.material, pbr_input.material.base_color);
+    pbr_input.material.base_color = alpha_discard_at(pbr_input.material, pbr_input.material.base_color, in.position.xy);
 
     // clustered decals
     apply_decals(&pbr_input);

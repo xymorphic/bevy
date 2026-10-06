@@ -16,6 +16,7 @@
     mesh_types::{MESH_FLAGS_SHADOW_RECEIVER_BIT, MESH_FLAGS_TRANSMITTED_SHADOW_RECEIVER_BIT},
 }
 #import bevy_pbr::mesh_view_bindings::globals
+#import bevy_pbr::alpha_dither::alpha_to_coverage_cutoff
 #import bevy_pbr::view_transformations::{position_world_to_ndc}
 #import bevy_render::maths::{E, powsafe}
 
@@ -105,6 +106,16 @@ fn visibility_range_dither(frag_coord: vec4<f32>, dither: i32) {
 #endif
 
 fn alpha_discard(material: pbr_types::StandardMaterial, output_color: vec4<f32>) -> vec4<f32> {
+    return alpha_discard_at(material, output_color, vec2<f32>(0.0));
+}
+
+// `alpha_discard` for the pixel at `frag_coord`. Without MSAA, alpha to coverage becomes a
+// dithered alpha test at that pixel, the same test as in the prepass.
+fn alpha_discard_at(
+    material: pbr_types::StandardMaterial,
+    output_color: vec4<f32>,
+    frag_coord: vec2<f32>,
+) -> vec4<f32> {
     var color = output_color;
     let alpha_mode = material.flags & pbr_types::STANDARD_MATERIAL_FLAGS_ALPHA_MODE_RESERVED_BITS;
     if alpha_mode == pbr_types::STANDARD_MATERIAL_FLAGS_ALPHA_MODE_OPAQUE {
@@ -118,7 +129,11 @@ fn alpha_discard(material: pbr_types::StandardMaterial, output_color: vec4<f32>)
     // alpha mask.
     else if alpha_mode == pbr_types::STANDARD_MATERIAL_FLAGS_ALPHA_MODE_MASK ||
             alpha_mode == pbr_types::STANDARD_MATERIAL_FLAGS_ALPHA_MODE_ALPHA_TO_COVERAGE {
-        if color.a >= material.alpha_cutoff {
+        var cutoff = material.alpha_cutoff;
+        if alpha_mode == pbr_types::STANDARD_MATERIAL_FLAGS_ALPHA_MODE_ALPHA_TO_COVERAGE {
+            cutoff = alpha_to_coverage_cutoff(frag_coord, cutoff);
+        }
+        if color.a >= cutoff {
             // NOTE: If rendering as masked alpha and >= the cutoff, render as fully opaque
             color.a = 1.0;
         } else {
