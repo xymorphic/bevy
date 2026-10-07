@@ -40,7 +40,9 @@ struct Vertex {
 struct VertexOutput {
     // This is `clip position` when the struct is used as a vertex stage output
     // and `frag coord` when used as a fragment stage input
-    @builtin(position) position: vec4<f32>,
+    // Invariant, so that the prepass and the main pass give the same depth bit for bit, and a
+    // main pass can test depth for equality with the prepass.
+    @invariant @builtin(position) position: vec4<f32>,
 
 #ifdef VERTEX_UVS_A
     @location(0) uv: vec2<f32>,

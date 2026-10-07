@@ -117,6 +117,13 @@ fn alpha_discard_at(
     frag_coord: vec2<f32>,
 ) -> vec4<f32> {
     var color = output_color;
+#ifdef DEPTH_EQUAL_MAIN_PASS
+    // The depth prepass already discarded the uncovered fragments, and this main pass draws
+    // only where its depth equals the prepass depth, so it keeps every fragment and the GPU can
+    // reject hidden ones before shading them.
+    color.a = 1.0;
+    return color;
+#endif
     let alpha_mode = material.flags & pbr_types::STANDARD_MATERIAL_FLAGS_ALPHA_MODE_RESERVED_BITS;
     if alpha_mode == pbr_types::STANDARD_MATERIAL_FLAGS_ALPHA_MODE_OPAQUE {
         // NOTE: If rendering as opaque, alpha should be ignored so set to 1.0
