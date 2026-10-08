@@ -45,7 +45,7 @@ use bevy_ecs::{
 use bevy_image::Image;
 use bevy_log::warn;
 use bevy_log::warn_once;
-use bevy_math::{uvec2, vec2, Mat4, URect, UVec2, UVec4, Vec2};
+use bevy_math::{uvec2, vec2, Mat4, URect, UVec2, UVec4, Vec2, Vec3};
 use bevy_platform::collections::{HashMap, HashSet};
 use bevy_reflect::prelude::*;
 use bevy_transform::components::GlobalTransform;
@@ -774,7 +774,7 @@ pub fn sort_cameras(
     }
 }
 
-/// A subpixel offset to jitter a perspective camera's frustum by.
+/// A subpixel offset to jitter the frustum of a perspective or orthographic camera by.
 ///
 /// Useful for temporal rendering techniques.
 #[derive(Component, Clone, Default, Reflect)]
@@ -787,15 +787,15 @@ pub struct TemporalJitter {
 impl TemporalJitter {
     pub fn jitter_projection(&self, clip_from_view: &mut Mat4, view_size: Vec2) {
         // https://github.com/GPUOpen-LibrariesAndSDKs/FidelityFX-SDK/blob/d7531ae47d8b36a5d4025663e731a47a38be882f/docs/techniques/media/super-resolution-temporal/jitter-space.svg
-        let mut jitter = (self.offset * vec2(2.0, -2.0)) / view_size;
+        let jitter = (self.offset * vec2(2.0, -2.0)) / view_size;
 
-        // orthographic
-        if clip_from_view.w_axis.w == 1.0 {
-            jitter *= vec2(clip_from_view.x_axis.x, clip_from_view.y_axis.y) * 0.5;
-        }
-
-        clip_from_view.z_axis.x += jitter.x;
-        clip_from_view.z_axis.y += jitter.y;
+        // The jitter moves the whole picture in clip space. A perspective projection keeps
+        // the depth of a point in clip w, so it takes the shift in its z column, scaled by the
+        // depth that the perspective divide removes again. An orthographic projection has a w
+        // of 1, so the shift goes in its translation; in its z column it would grow with the
+        // depth of each point and shake the picture by many pixels.
+        *clip_from_view =
+            Mat4::from_translation(Vec3::new(-jitter.x, -jitter.y, 0.0)) * *clip_from_view;
     }
 }
 
@@ -1163,5 +1163,42 @@ impl PendingQueues {
     /// order to clean up resources relating to views that no longer exist.
     pub fn expire_stale_views(&mut self, all_views: &HashSet<RetainedViewEntity>) {
         self.retain(|retained_view_entity, _| all_views.contains(retained_view_entity));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::TemporalJitter;
+    use bevy_math::{Mat4, Vec2, Vec3, Vec4};
+
+    /// Where `point`, in view space, lands in normalized device coordinates.
+    fn ndc(clip_from_view: Mat4, point: Vec3) -> Vec2 {
+        let clip = clip_from_view * Vec4::new(point.x, point.y, point.z, 1.0);
+        Vec2::new(clip.x, clip.y) / clip.w
+    }
+
+    #[test]
+    fn jitter_moves_every_depth_by_the_same_subpixel_offset() {
+        let jitter = TemporalJitter {
+            offset: Vec2::new(0.5, -0.25),
+        };
+        let size = Vec2::new(1000.0, 500.0);
+        let expected = -(jitter.offset * Vec2::new(2.0, -2.0)) / size;
+        let projections = [
+            Mat4::perspective_infinite_reverse_rh(1.0, 2.0, 0.1),
+            Mat4::orthographic_rh(-40.0, 40.0, -25.0, 25.0, 3000.0, -2500.0),
+        ];
+        for projection in projections {
+            let mut jittered = projection;
+            jitter.jitter_projection(&mut jittered, size);
+            for depth in [-1.0, -50.0, -800.0, -2000.0] {
+                let point = Vec3::new(3.0, -2.0, depth);
+                let moved = ndc(jittered, point) - ndc(projection, point);
+                assert!(
+                    (moved - expected).abs().max_element() < 1e-5,
+                    "a point {depth} m deep moved {moved}, not {expected}"
+                );
+            }
+        }
     }
 }
