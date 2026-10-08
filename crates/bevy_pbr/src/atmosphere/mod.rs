@@ -76,7 +76,7 @@ use bevy_shader::load_shader_library;
 use environment::{
     atmosphere_environment, init_atmosphere_probe_layout, init_atmosphere_probe_pipeline,
     prepare_atmosphere_probe_bind_groups, prepare_atmosphere_probe_components,
-    prepare_probe_textures, AtmosphereEnvironmentMap,
+    prepare_probe_textures, refresh_atmosphere_skies, AtmosphereEnvironmentMap,
 };
 use node::{atmosphere_luts, render_sky};
 use resources::{
@@ -185,6 +185,9 @@ impl Plugin for AtmospherePlugin {
                         .in_set(RenderSystems::Prepare)
                         .before(RenderSystems::PrepareResources),
                     prepare_atmosphere_probe_bind_groups.in_set(RenderSystems::PrepareBindGroups),
+                    refresh_atmosphere_skies
+                        .in_set(RenderSystems::PrepareResources)
+                        .after(prepare_atmosphere_textures),
                     prepare_atmosphere_transforms.in_set(RenderSystems::PrepareResources),
                     prepare_atmosphere_bind_groups.in_set(RenderSystems::PrepareBindGroups),
                     write_atmosphere_buffer.in_set(RenderSystems::PrepareResources),
@@ -361,7 +364,7 @@ impl Default for AtmosphereSettings {
     }
 }
 
-#[derive(Clone, Component, Reflect, ShaderType)]
+#[derive(Clone, Component, Reflect, ShaderType, PartialEq)]
 #[reflect(Default)]
 pub struct GpuAtmosphereSettings {
     pub transmittance_lut_size: UVec2,

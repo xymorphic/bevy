@@ -12,6 +12,7 @@ use bevy_render::{
 use crate::{resources::GpuAtmosphere, ViewLightsUniformOffset};
 
 use super::{
+    environment::AtmosphereSkyRefresh,
     resources::{
         AtmosphereBindGroups, AtmosphereLutPipelines, AtmosphereTransformsOffset,
         RenderSkyPipelineId,
@@ -28,6 +29,7 @@ pub fn atmosphere_luts(
         &AtmosphereTransformsOffset,
         &ViewUniformOffset,
         &ViewLightsUniformOffset,
+        Option<&AtmosphereSkyRefresh>,
     )>,
     pipelines: Res<AtmosphereLutPipelines>,
     pipeline_cache: Res<PipelineCache>,
@@ -41,6 +43,7 @@ pub fn atmosphere_luts(
         atmosphere_transforms_offset,
         view_uniforms_offset,
         lights_uniforms_offset,
+        refresh,
     ) = view.into_inner();
 
     let (
@@ -60,11 +63,7 @@ pub fn atmosphere_luts(
 
     let command_encoder = ctx.command_encoder();
 
-    let mut luts_pass = command_encoder.begin_compute_pass(&ComputePassDescriptor {
-        label: Some("atmosphere_luts"),
-        timestamp_writes: None,
-    });
-
+    // Each LUT has a pass of its own, so a GPU trace shows what each one costs.
     fn dispatch_2d(compute_pass: &mut ComputePass, size: UVec2) {
         const WORKGROUP_SIZE: u32 = 16;
         let workgroups_x = size.x.div_ceil(WORKGROUP_SIZE);
@@ -72,59 +71,75 @@ pub fn atmosphere_luts(
         compute_pass.dispatch_workgroups(workgroups_x, workgroups_y, 1);
     }
 
-    // Transmittance LUT
+    // The transmittance, multiscattering, and sky-view LUTs hold the sky itself, which does not
+    // follow the direction of the view, so they stay until the sky changes. The aerial-view LUT
+    // fills the frustum of the view, so it is drawn in every frame.
+    if refresh.is_none_or(|refresh| refresh.draw) {
+        {
+            let mut pass = command_encoder.begin_compute_pass(&ComputePassDescriptor {
+                label: Some("atmosphere_transmittance_lut"),
+                timestamp_writes: None,
+            });
+            pass.set_pipeline(transmittance_lut_pipeline);
+            pass.set_bind_group(
+                0,
+                &bind_groups.transmittance_lut,
+                &[
+                    atmosphere_uniforms_offset.index(),
+                    settings_uniforms_offset.index(),
+                ],
+            );
+            dispatch_2d(&mut pass, settings.transmittance_lut_size);
+        }
 
-    luts_pass.set_pipeline(transmittance_lut_pipeline);
-    luts_pass.set_bind_group(
-        0,
-        &bind_groups.transmittance_lut,
-        &[
-            atmosphere_uniforms_offset.index(),
-            settings_uniforms_offset.index(),
-        ],
-    );
+        {
+            let mut pass = command_encoder.begin_compute_pass(&ComputePassDescriptor {
+                label: Some("atmosphere_multiscattering_lut"),
+                timestamp_writes: None,
+            });
+            pass.set_pipeline(multiscattering_lut_pipeline);
+            pass.set_bind_group(
+                0,
+                &bind_groups.multiscattering_lut,
+                &[
+                    atmosphere_uniforms_offset.index(),
+                    settings_uniforms_offset.index(),
+                ],
+            );
+            pass.dispatch_workgroups(
+                settings.multiscattering_lut_size.x,
+                settings.multiscattering_lut_size.y,
+                1,
+            );
+        }
 
-    dispatch_2d(&mut luts_pass, settings.transmittance_lut_size);
+        {
+            let mut pass = command_encoder.begin_compute_pass(&ComputePassDescriptor {
+                label: Some("atmosphere_sky_view_lut"),
+                timestamp_writes: None,
+            });
+            pass.set_pipeline(sky_view_lut_pipeline);
+            pass.set_bind_group(
+                0,
+                &bind_groups.sky_view_lut,
+                &[
+                    atmosphere_uniforms_offset.index(),
+                    settings_uniforms_offset.index(),
+                    atmosphere_transforms_offset.index(),
+                    view_uniforms_offset.offset,
+                    lights_uniforms_offset.offset,
+                ],
+            );
+            dispatch_2d(&mut pass, settings.sky_view_lut_size);
+        }
+    }
 
-    // Multiscattering LUT
-
-    luts_pass.set_pipeline(multiscattering_lut_pipeline);
-    luts_pass.set_bind_group(
-        0,
-        &bind_groups.multiscattering_lut,
-        &[
-            atmosphere_uniforms_offset.index(),
-            settings_uniforms_offset.index(),
-        ],
-    );
-
-    luts_pass.dispatch_workgroups(
-        settings.multiscattering_lut_size.x,
-        settings.multiscattering_lut_size.y,
-        1,
-    );
-
-    // Sky View LUT
-
-    luts_pass.set_pipeline(sky_view_lut_pipeline);
-    luts_pass.set_bind_group(
-        0,
-        &bind_groups.sky_view_lut,
-        &[
-            atmosphere_uniforms_offset.index(),
-            settings_uniforms_offset.index(),
-            atmosphere_transforms_offset.index(),
-            view_uniforms_offset.offset,
-            lights_uniforms_offset.offset,
-        ],
-    );
-
-    dispatch_2d(&mut luts_pass, settings.sky_view_lut_size);
-
-    // Aerial View LUT
-
-    luts_pass.set_pipeline(aerial_view_lut_pipeline);
-    luts_pass.set_bind_group(
+    let mut pass = command_encoder.begin_compute_pass(&ComputePassDescriptor {
+        label: Some("atmosphere_aerial_view_lut"),
+        timestamp_writes: None,
+    });
+    pass.set_pipeline(aerial_view_lut_pipeline);
+    pass.set_bind_group(
         0,
         &bind_groups.aerial_view_lut,
         &[
@@ -134,8 +149,7 @@ pub fn atmosphere_luts(
             lights_uniforms_offset.offset,
         ],
     );
-
-    dispatch_2d(&mut luts_pass, settings.aerial_view_lut_size.xy());
+    dispatch_2d(&mut pass, settings.aerial_view_lut_size.xy());
 }
 
 pub fn render_sky(

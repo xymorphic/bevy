@@ -91,6 +91,12 @@ pub struct GeneratorPipelines {
     pub irradiance: CachedComputePipelineId,
 }
 
+/// Leaves a generated environment map light out of filtering this frame: its environment map
+/// is the same as when it was last filtered, so its light would come out the same. A light
+/// without it is filtered every frame, as its environment map may change at any time.
+#[derive(Component)]
+pub struct EnvironmentMapUnchanged;
+
 /// Configuration for downsampling strategy based on device limits
 #[derive(Resource, Clone, Copy, Debug, PartialEq, Eq)]
 pub struct DownsamplingConfig {
@@ -840,7 +846,7 @@ fn create_placeholder_storage_view(render_device: &RenderDevice) -> TextureView 
 }
 
 pub fn downsampling_system(
-    query: Query<(&GeneratorBindGroups, &RenderEnvironmentMap)>,
+    query: Query<(&GeneratorBindGroups, &RenderEnvironmentMap), Without<EnvironmentMapUnchanged>>,
     pipeline_cache: Res<PipelineCache>,
     pipelines: Option<Res<GeneratorPipelines>>,
     mut ctx: RenderContext,
@@ -940,7 +946,7 @@ pub fn downsampling_system(
 }
 
 pub fn filtering_system(
-    query: Query<(&GeneratorBindGroups, &RenderEnvironmentMap)>,
+    query: Query<(&GeneratorBindGroups, &RenderEnvironmentMap), Without<EnvironmentMapUnchanged>>,
     pipeline_cache: Res<PipelineCache>,
     pipelines: Option<Res<GeneratorPipelines>>,
     mut ctx: RenderContext,
