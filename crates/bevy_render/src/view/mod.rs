@@ -830,6 +830,15 @@ impl ViewTarget {
         }
     }
 
+    /// Whether the next pass to use this target's main texture clears it.
+    pub fn color_attachment_will_clear(&self) -> bool {
+        if self.main_texture.load(Ordering::SeqCst) == 0 {
+            self.main_textures.a.will_clear()
+        } else {
+            self.main_textures.b.will_clear()
+        }
+    }
+
     /// Retrieve this target's "unsampled" main texture's color attachment.
     pub fn get_unsampled_color_attachment(&self) -> RenderPassColorAttachment<'_> {
         if self.main_texture.load(Ordering::SeqCst) == 0 {
@@ -992,6 +1001,11 @@ impl ViewDepthTexture {
 
     pub fn view(&self) -> &TextureView {
         &self.attachment.view
+    }
+
+    /// Whether the next pass to store into this depth texture clears it.
+    pub fn will_clear(&self) -> bool {
+        self.attachment.will_clear()
     }
 }
 

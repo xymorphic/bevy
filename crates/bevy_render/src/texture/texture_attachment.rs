@@ -80,6 +80,12 @@ impl ColorAttachment {
         }
     }
 
+    /// Whether the next pass to use this attachment clears it: no pass used it yet this frame,
+    /// and it has a clear color.
+    pub fn will_clear(&self) -> bool {
+        self.clear_color.is_some() && self.is_first_call.load(Ordering::SeqCst)
+    }
+
     pub(crate) fn mark_as_cleared(&self) {
         self.is_first_call.store(false, Ordering::SeqCst);
     }
@@ -123,6 +129,11 @@ impl DepthAttachment {
             }),
             stencil_ops: None,
         }
+    }
+
+    /// Whether the next pass to store into this attachment clears it.
+    pub fn will_clear(&self) -> bool {
+        self.is_first_call.load(Ordering::Relaxed)
     }
 
     /// Marks this depth attachment as unused this frame so that it'll be

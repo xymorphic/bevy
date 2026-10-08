@@ -55,6 +55,18 @@ pub fn main_opaque_pass_3d(
         return;
     };
 
+    // With nothing to draw and nothing to clear, the pass would only load and store its
+    // attachments. An earlier pass that used them also resolved them.
+    let skybox = skybox_pipeline.is_some() && skybox_bind_group.is_some();
+    if opaque_phase.is_empty()
+        && alpha_mask_phase.is_empty()
+        && !skybox
+        && !target.color_attachment_will_clear()
+        && !depth.will_clear()
+    {
+        return;
+    }
+
     #[cfg(feature = "trace")]
     let _main_opaque_pass_3d_span = info_span!("main_opaque_pass_3d").entered();
 
