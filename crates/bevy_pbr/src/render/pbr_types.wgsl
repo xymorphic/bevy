@@ -28,6 +28,8 @@ struct StandardMaterial {
     max_relief_mapping_search_steps: u32,
     /// ID for specifying which deferred lighting pass should be used for rendering this material, if any.
     deferred_lighting_pass_id: u32,
+    normal_map_scale: f32,
+    occlusion_strength: f32,
 };
 
 // !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!

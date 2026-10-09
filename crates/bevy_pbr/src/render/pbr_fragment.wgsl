@@ -653,6 +653,12 @@ pbr_input.material.uv_transform = uv_transform;
                     bias.mip_bias,
 #endif  // MESHLET_MESH_MATERIAL_PASS
                 ).r;
+#ifdef BINDLESS
+            let occlusion_strength = pbr_bindings::material_array[material_indices[slot].material].occlusion_strength;
+#else   // BINDLESS
+            let occlusion_strength = pbr_bindings::material.occlusion_strength;
+#endif  // BINDLESS
+            diffuse_occlusion = 1.0 + occlusion_strength * (diffuse_occlusion - 1.0);
         }
 #endif
 #ifdef SCREEN_SPACE_AMBIENT_OCCLUSION
@@ -707,7 +713,12 @@ pbr_input.material.uv_transform = uv_transform;
 #endif  // MESHLET_MESH_MATERIAL_PASS
             ).rgb;
 
-        pbr_input.N = pbr_functions::apply_normal_mapping(flags, TBN, double_sided, is_front, Nt);
+#ifdef BINDLESS
+        let normal_map_scale = pbr_bindings::material_array[material_indices[slot].material].normal_map_scale;
+#else   // BINDLESS
+        let normal_map_scale = pbr_bindings::material.normal_map_scale;
+#endif  // BINDLESS
+        pbr_input.N = pbr_functions::apply_scaled_normal_mapping(flags, TBN, double_sided, is_front, Nt, normal_map_scale);
 
 #endif  // STANDARD_MATERIAL_NORMAL_MAP
 

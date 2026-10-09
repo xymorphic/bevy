@@ -1280,9 +1280,11 @@ fn load_material(
         .normal_texture()
         .map(|info| uv_channel(material, "normal map", info.tex_coord()))
         .unwrap_or_default();
+    let normal_map_scale = material
+        .normal_texture()
+        .map_or(1.0, |normal_texture| normal_texture.scale());
     let normal_map_texture: Option<Handle<Image>> =
         material.normal_texture().map(|normal_texture| {
-            // TODO: handle normal_texture.scale
             textures
                 .get(normal_texture.texture().index())
                 .cloned()
@@ -1305,8 +1307,10 @@ fn load_material(
         .occlusion_texture()
         .map(|info| uv_channel(material, "occlusion", info.tex_coord()))
         .unwrap_or_default();
+    let occlusion_strength = material
+        .occlusion_texture()
+        .map_or(1.0, |occlusion_texture| occlusion_texture.strength());
     let occlusion_texture = material.occlusion_texture().map(|occlusion_texture| {
-        // TODO: handle occlusion_texture.strength() (a scalar multiplier for occlusion strength)
         textures
             .get(occlusion_texture.texture().index())
             .cloned()
@@ -1319,7 +1323,6 @@ fn load_material(
         .map(|info| uv_channel(material, "emissive", info.tex_coord()))
         .unwrap_or_default();
     let emissive_texture = material.emissive_texture().map(|info| {
-        // TODO: handle occlusion_texture.strength() (a scalar multiplier for occlusion strength)
         warn_on_differing_texture_transforms(material, &info, uv_transform, "emissive");
         textures
             .get(info.texture().index())
@@ -1424,6 +1427,7 @@ fn load_material(
         metallic_roughness_texture,
         normal_map_channel,
         normal_map_texture,
+        normal_map_scale,
         double_sided: material.double_sided(),
         cull_mode: if material.double_sided() {
             None
@@ -1434,6 +1438,7 @@ fn load_material(
         },
         occlusion_channel,
         occlusion_texture,
+        occlusion_strength,
         emissive,
         emissive_channel,
         emissive_texture,

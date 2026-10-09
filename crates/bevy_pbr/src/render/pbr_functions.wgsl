@@ -207,6 +207,19 @@ fn apply_normal_mapping(
     is_front: bool,
     in_Nt: vec3<f32>,
 ) -> vec3<f32> {
+    return apply_scaled_normal_mapping(standard_material_flags, TBN, double_sided, is_front, in_Nt, 1.0);
+}
+
+// The normal of `apply_normal_mapping` with the x and y of the tangent-space normal multiplied
+// by `scale`, as the `scale` of a glTF `normalTexture`.
+fn apply_scaled_normal_mapping(
+    standard_material_flags: u32,
+    TBN: mat3x3<f32>,
+    double_sided: bool,
+    is_front: bool,
+    in_Nt: vec3<f32>,
+    scale: f32,
+) -> vec3<f32> {
     // Unpack the TBN vectors.
     var T = TBN[0];
     var B = TBN[1];
@@ -221,6 +234,7 @@ fn apply_normal_mapping(
     } else {
         Nt = Nt * 2.0 - 1.0;
     }
+    Nt = vec3<f32>(Nt.xy * scale, Nt.z);
     // Normal maps authored for DirectX require flipping the y component
     if (standard_material_flags & pbr_types::STANDARD_MATERIAL_FLAGS_FLIP_NORMAL_MAP_Y) != 0u {
         Nt.y = -Nt.y;

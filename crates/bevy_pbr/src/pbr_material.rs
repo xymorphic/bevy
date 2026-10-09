@@ -413,6 +413,13 @@ pub struct StandardMaterial {
     /// it to right-handed conventions.
     pub flip_normal_map_y: bool,
 
+    /// How much the [`StandardMaterial::normal_map_texture`] tilts the normal: the x and y of
+    /// each tangent-space sample are multiplied by it before the normal is made unit length
+    /// again, as the `scale` of a glTF `normalTexture`.
+    ///
+    /// Defaults to `1.0`.
+    pub normal_map_scale: f32,
+
     /// The UV channel to use for the [`StandardMaterial::occlusion_texture`].
     ///
     /// Defaults to [`UvChannel::Uv0`].
@@ -437,6 +444,12 @@ pub struct StandardMaterial {
     #[sampler(8)]
     #[dependency]
     pub occlusion_texture: Option<Handle<Image>>,
+
+    /// How much the [`StandardMaterial::occlusion_texture`] darkens: a sample `r` gives the
+    /// occlusion `1 + strength * (r - 1)`, as the `strength` of a glTF `occlusionTexture`.
+    ///
+    /// Defaults to `1.0`.
+    pub occlusion_strength: f32,
 
     /// The UV channel to use for the [`StandardMaterial::specular_texture`].
     ///
@@ -890,8 +903,10 @@ impl Default for StandardMaterial {
             attenuation_distance: f32::INFINITY,
             occlusion_channel: UvChannel::Uv0,
             occlusion_texture: None,
+            occlusion_strength: 1.0,
             normal_map_channel: UvChannel::Uv0,
             normal_map_texture: None,
+            normal_map_scale: 1.0,
             #[cfg(feature = "pbr_specular_textures")]
             specular_channel: UvChannel::Uv0,
             #[cfg(feature = "pbr_specular_textures")]
@@ -1061,6 +1076,10 @@ pub struct StandardMaterialUniform {
     pub max_relief_mapping_search_steps: u32,
     /// ID for specifying which deferred lighting pass should be used for rendering this material, if any.
     pub deferred_lighting_pass_id: u32,
+    /// The [`StandardMaterial::normal_map_scale`].
+    pub normal_map_scale: f32,
+    /// The [`StandardMaterial::occlusion_strength`].
+    pub occlusion_strength: f32,
 }
 
 impl AsBindGroupShaderType<StandardMaterialUniform> for StandardMaterial {
@@ -1207,6 +1226,8 @@ impl AsBindGroupShaderType<StandardMaterialUniform> for StandardMaterial {
             lightmap_exposure: self.lightmap_exposure,
             max_relief_mapping_search_steps: self.parallax_mapping_method.max_steps(),
             deferred_lighting_pass_id: self.deferred_lighting_pass_id as u32,
+            normal_map_scale: self.normal_map_scale,
+            occlusion_strength: self.occlusion_strength,
             uv_transform: self.uv_transform.into(),
         }
     }

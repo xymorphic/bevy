@@ -114,13 +114,19 @@ fn fragment(
 #endif  // MESHLET_MESH_MATERIAL_PASS
             ).rgb;
         let TBN = pbr_functions::calculate_tbn_mikktspace(normal, in.world_tangent);
+#ifdef BINDLESS
+        let normal_map_scale = pbr_bindings::material_array[material_indices[slot].material].normal_map_scale;
+#else   // BINDLESS
+        let normal_map_scale = pbr_bindings::material.normal_map_scale;
+#endif  // BINDLESS
 
-        normal = pbr_functions::apply_normal_mapping(
+        normal = pbr_functions::apply_scaled_normal_mapping(
             flags,
             TBN,
             double_sided,
             is_front,
             Nt,
+            normal_map_scale,
         );
 
 #endif  // STANDARD_MATERIAL_NORMAL_MAP

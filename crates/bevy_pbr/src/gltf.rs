@@ -59,8 +59,10 @@ pub fn standard_material_from_gltf_material(material: &GltfMaterial) -> Standard
         attenuation_color: material.attenuation_color,
         normal_map_channel: material.normal_map_channel.clone(),
         normal_map_texture: material.normal_map_texture.clone(),
+        normal_map_scale: material.normal_map_scale,
         occlusion_channel: material.occlusion_channel.clone(),
         occlusion_texture: material.occlusion_texture.clone(),
+        occlusion_strength: material.occlusion_strength,
         #[cfg(feature = "pbr_specular_textures")]
         specular_channel: material.specular_channel.clone(),
         #[cfg(feature = "pbr_specular_textures")]

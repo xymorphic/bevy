@@ -108,11 +108,17 @@ pub struct GltfMaterial {
     /// Used to fake the lighting of bumps and dents on a material.
     pub normal_map_texture: Option<Handle<Image>>,
 
+    /// The `scale` of the `normalTexture`, which multiplies the x and y of its samples.
+    pub normal_map_scale: f32,
+
     /// The UV channel to use for the [`GltfMaterial::occlusion_texture`].
     pub occlusion_channel: UvChannel,
 
     /// Specifies the level of exposure to ambient light.
     pub occlusion_texture: Option<Handle<Image>>,
+
+    /// The `strength` of the `occlusionTexture`: a sample `r` gives `1 + strength * (r - 1)`.
+    pub occlusion_strength: f32,
 
     /// An extra thin translucent layer on top of the main PBR layer. This is
     /// typically used for painted surfaces.
@@ -225,8 +231,10 @@ impl Default for GltfMaterial {
             attenuation_distance: f32::INFINITY,
             occlusion_channel: UvChannel::Uv0,
             occlusion_texture: None,
+            occlusion_strength: 1.0,
             normal_map_channel: UvChannel::Uv0,
             normal_map_texture: None,
+            normal_map_scale: 1.0,
             #[cfg(feature = "pbr_specular_textures")]
             specular_channel: UvChannel::Uv0,
             #[cfg(feature = "pbr_specular_textures")]
